@@ -11,7 +11,7 @@ from decimal import Decimal
 from aiohttp import web, ClientSession
 from aiohttp.web import middleware
 from dotenv import load_dotenv
-from bot.crypto_pay import init_crypto_pay, currency_converter
+from bot.crypto_pay import init_crypto_pay, crypto_pay_api, currency_converter
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Конфигурация
 CRYPTO_PAY_API_TOKEN = os.getenv('CRYPTO_PAY_API_TOKEN')
 CRYPTO_PAY_TESTNET = os.getenv('CRYPTO_PAY_TESTNET', 'true').lower() == 'true'
-API_PORT = int(os.getenv('CURRENCY_API_PORT', '8001'))
+API_PORT = int(os.getenv('CURRENCY_API_PORT', '8002'))
 
 # Инициализация Crypto Pay
 if CRYPTO_PAY_API_TOKEN:
@@ -34,6 +34,9 @@ if CRYPTO_PAY_API_TOKEN:
     logger.info("Crypto Pay API инициализирован")
 else:
     logger.warning("CRYPTO_PAY_API_TOKEN не установлен")
+
+# Получаем инициализированный конвертер
+from bot.crypto_pay import currency_converter as converter
 
 # CORS middleware
 @middleware
@@ -53,14 +56,14 @@ async def cors_handler(request, handler):
 async def get_crypto_rates(request):
     """Получает курсы криптовалют к рублю"""
     try:
-        if not currency_converter:
+        if not converter:
             return web.json_response({
                 'success': False,
                 'error': 'Crypto Pay API не инициализирован'
             }, status=500)
         
         # Получаем курсы
-        rates = await currency_converter.get_rates_from_rub()
+        rates = await converter.get_rates_from_rub()
         
         # Форматируем ответ
         formatted_rates = {}
@@ -95,14 +98,14 @@ async def convert_rub_to_crypto(request):
                 'error': 'Сумма должна быть больше 0'
             }, status=400)
         
-        if not currency_converter:
+        if not converter:
             return web.json_response({
                 'success': False,
                 'error': 'Crypto Pay API не инициализирован'
             }, status=500)
         
         # Конвертируем
-        conversions = await currency_converter.convert_rub_to_crypto(rub_amount)
+        conversions = await converter.convert_rub_to_crypto(rub_amount)
         
         # Форматируем для отображения
         formatted_conversions = {}
@@ -145,7 +148,7 @@ async def health_check(request):
     """Проверка здоровья API"""
     return web.json_response({
         'status': 'ok',
-        'crypto_pay_enabled': currency_converter is not None
+        'crypto_pay_enabled': converter is not None
     })
 
 def create_app():

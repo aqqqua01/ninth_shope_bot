@@ -93,6 +93,14 @@ class CryptoPayAPI:
         
         return await self._make_request("GET", "getInvoices", data)
     
+    async def set_webhook(self, webhook_url: str) -> Dict:
+        """Устанавливает webhook URL"""
+        data = {
+            "webhook_url": webhook_url
+        }
+        
+        return await self._make_request("POST", "setWebhook", data)
+    
     def verify_webhook_signature(self, body: str, signature: str) -> bool:
         """Проверяет подпись webhook"""
         try:

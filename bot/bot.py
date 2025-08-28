@@ -15,6 +15,8 @@ from urllib.parse import parse_qsl
 
 from telegram import Update, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from aiohttp import web
+import asyncio
 from dotenv import load_dotenv
 from crypto_pay import init_crypto_pay, crypto_pay_api, currency_converter
 
@@ -37,6 +39,8 @@ CURRENCY = os.getenv('CURRENCY', 'РУБ')
 WEBAPP_URL = os.getenv('WEBAPP_URL')
 CRYPTO_PAY_API_TOKEN = os.getenv('CRYPTO_PAY_API_TOKEN')
 CRYPTO_PAY_TESTNET = os.getenv('CRYPTO_PAY_TESTNET', 'true').lower() == 'true'
+WEBHOOK_PORT = int(os.getenv('WEBHOOK_PORT', '8003'))
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Публичный URL для webhook'ов
 
 # Проверка обязательных переменных
 if not BOT_TOKEN:
@@ -51,6 +55,9 @@ if not WEBAPP_URL:
     logger.warning("WEBAPP_URL не установлен - WebApp кнопка будет скрыта")
 
 # Инициализация Crypto Pay API
+# Глобальные переменные
+telegram_app = None
+
 if CRYPTO_PAY_API_TOKEN:
     try:
         init_crypto_pay(CRYPTO_PAY_API_TOKEN, CRYPTO_PAY_TESTNET)
@@ -345,12 +352,135 @@ async def handle_unknown_message(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 
-def main() -> None:
-    """Основная функция запуска бота"""
+# ======================== WEBHOOK HANDLERS ========================
+
+async def crypto_pay_webhook(request):
+    """Обрабатывает webhook от Crypto Pay"""
+    try:
+        # Получаем данные
+        body = await request.text()
+        headers = request.headers
+        
+        # Проверяем подпись
+        signature = headers.get('crypto-pay-api-signature')
+        if not signature:
+            logger.warning("Webhook без подписи")
+            return web.json_response({'error': 'No signature'}, status=400)
+            
+        # Верифицируем подпись
+        if crypto_pay_api and not crypto_pay_api.verify_webhook_signature(body, signature):
+            logger.warning("Неверная подпись webhook")
+            return web.json_response({'error': 'Invalid signature'}, status=400)
+        
+        # Парсим данные
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            logger.error("Ошибка парсинга JSON webhook")
+            return web.json_response({'error': 'Invalid JSON'}, status=400)
+        
+        update_type = data.get('update_type')
+        payload = data.get('payload', {})
+        
+        if update_type == 'invoice_paid':
+            await handle_payment_success(payload)
+        else:
+            logger.info(f"Неизвестный тип webhook: {update_type}")
+        
+        return web.json_response({'status': 'ok'})
+        
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook: {e}")
+        return web.json_response({'error': 'Internal error'}, status=500)
+
+async def handle_payment_success(payload):
+    """Обрабатывает успешный платеж"""
+    try:
+        invoice_id = payload.get('invoice_id')
+        status = payload.get('status')
+        amount = payload.get('amount')
+        asset = payload.get('asset')
+        paid_amount = payload.get('paid_amount')
+        
+        # Можно извлечь user_id из описания инвойса
+        description = payload.get('description', '')
+        
+        logger.info(f"Получен платеж: {invoice_id}, статус: {status}, сумма: {paid_amount} {asset}")
+        
+        if ADMIN_CHAT_ID and status == 'paid':
+            message = (
+                "💰 <b>КРИПТОПЛАТЕЖ ПОЛУЧЕН!</b>\n\n"
+                f"📋 Инвойс: <code>{invoice_id}</code>\n"
+                f"💳 Сумма: {paid_amount} {asset}\n"
+                f"📝 Описание: {description}\n"
+                f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+            )
+            
+            # Получаем application из глобальной переменной
+            bot_app = globals().get('telegram_app')
+            if bot_app:
+                await bot_app.bot.send_message(
+                    chat_id=ADMIN_CHAT_ID,
+                    text=message,
+                    parse_mode='HTML'
+                )
+        
+    except Exception as e:
+        logger.error(f"Ошибка обработки успешного платежа: {e}")
+
+def create_webhook_app():
+    """Создает webhook приложение"""
+    app = web.Application()
+    
+    # Добавляем маршруты
+    app.router.add_post('/webhook/crypto-pay', crypto_pay_webhook)
+    app.router.add_get('/webhook/health', lambda r: web.json_response({'status': 'ok'}))
+    
+    return app
+
+async def run_webhook_server():
+    """Запускает webhook сервер"""
+    if not WEBHOOK_URL:
+        logger.info("WEBHOOK_URL не установлен - webhook сервер не запускается")
+        return
+        
+    webhook_app = create_webhook_app()
+    
+    try:
+        runner = web.AppRunner(webhook_app)
+        await runner.setup()
+        
+        site = web.TCPSite(runner, '0.0.0.0', WEBHOOK_PORT)
+        await site.start()
+        
+        logger.info(f"Webhook сервер запущен на порту {WEBHOOK_PORT}")
+        logger.info(f"Webhook URL: {WEBHOOK_URL}/webhook/crypto-pay")
+        
+        # Настраиваем webhook в Crypto Pay
+        if crypto_pay_api:
+            webhook_url = f"{WEBHOOK_URL}/webhook/crypto-pay"
+            try:
+                await crypto_pay_api.set_webhook(webhook_url)
+                logger.info(f"Webhook установлен: {webhook_url}")
+            except Exception as e:
+                logger.error(f"Ошибка установки webhook: {e}")
+        
+        # Держим сервер живым
+        while True:
+            await asyncio.sleep(3600)  # Спим 1 час
+            
+    except Exception as e:
+        logger.error(f"Ошибка webhook сервера: {e}")
+
+async def main_async():
+    """Асинхронная главная функция"""
+    global telegram_app
+    
     logger.info("Запуск Steam Top-Up Bot...")
     
     # Создаем приложение
     application = Application.builder().token(BOT_TOKEN).build()
+    telegram_app = application  # Сохраняем для использования в webhook'ах
     
     # Регистрируем обработчики команд
     application.add_handler(CommandHandler("start", start_command))
@@ -369,8 +499,40 @@ def main() -> None:
     
     logger.info("Бот запущен и готов к работе!")
     
+    # Запускаем webhook сервер параллельно, если настроен
+    tasks = []
+    
+    if WEBHOOK_URL:
+        logger.info("Запуск webhook сервера...")
+        tasks.append(asyncio.create_task(run_webhook_server()))
+    
     # Запускаем бота
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    async with application:
+        await application.start()
+        await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        
+        # Ждем завершения всех задач
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        else:
+            try:
+                while True:
+                    await asyncio.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Получен сигнал остановки")
+        
+        await application.updater.stop()
+        await application.stop()
+
+def main() -> None:
+    """Основная функция запуска бота"""
+    try:
+        asyncio.run(main_async())
+    except KeyboardInterrupt:
+        logger.info("Бот остановлен пользователем")
+    except Exception as e:
+        logger.error(f"Ошибка запуска бота: {e}")
+        raise
 
 
 if __name__ == '__main__':
