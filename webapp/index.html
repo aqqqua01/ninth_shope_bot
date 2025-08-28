@@ -422,7 +422,7 @@
             cryptoRates.innerHTML = '';
             
             // Порядок отображения валют
-            const order = ['USDT', 'TON', 'BTC', 'ETH'];
+            const order = ['USDT', 'TON', 'BTC', 'ETH', 'LTC', 'BNB'];
             const sortedConversions = {};
             
             // Сначала добавляем валюты в нужном порядке
@@ -452,16 +452,17 @@
             cryptoConversion.style.display = 'block';
         }
 
-        // Функция с актуальными курсами (обновлено 28.08.2025)
+        // Функция с точными курсами из Crypto Bot (28.08.2025)
         function showFallbackCryptoRates(rubAmount) {
-            // Актуальные курсы основанные на реальных данных Crypto Bot
+            // Реальные курсы прямо из @CryptoBot
             const approximateRates = {
-                'USDT': rubAmount / 79.99,   // 1 USDT = 79.99 RUB
-                'TON': rubAmount / 510,      // ~510 RUB за TON  
-                'BTC': rubAmount / 8200000,  // ~8.2M RUB за BTC
-                'ETH': rubAmount / 275000,   // ~275K RUB за ETH
-                'LTC': rubAmount / 7800,     // ~7.8K RUB за LTC
-                'BNB': rubAmount / 48000     // ~48K RUB за BNB
+                'USDT': rubAmount / 79.99,        // 1 USDT = 79.99 RUB
+                'TON': rubAmount / 252.55,        // 1 TON = 252.55 RUB  
+                'BTC': rubAmount / 8200000,       // ~8.2M RUB за BTC
+                'ETH': rubAmount / 352274.43,     // 1 ETH = 352274.43 RUB
+                'LTC': rubAmount / 8597.99,       // 1 LTC = 8597.99 RUB
+                'BNB': rubAmount / 68905.16,      // 1 BNB = 68905.16 RUB
+                'TRX': rubAmount / 25.99          // 1 TRX = 25.99 RUB
             };
             
             const formattedRates = {};
@@ -473,6 +474,8 @@
                     formatted = amount.toFixed(4);
                 } else if (asset === 'LTC' || asset === 'BNB') {
                     formatted = amount.toFixed(3);
+                } else if (asset === 'TRX') {
+                    formatted = amount.toFixed(1);
                 } else {
                     formatted = amount.toFixed(2);
                 }
