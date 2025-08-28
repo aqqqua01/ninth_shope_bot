@@ -192,9 +192,12 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик данных от WebApp"""
     try:
+        # Получаем информацию о пользователе сразу в начале
+        user = update.effective_user
+        
         # Логируем сырые данные для отладки
         raw_data = update.message.web_app_data.data
-        logger.info(f"Получены сырые WebApp данные: {raw_data}")
+        logger.info(f"Получены сырые WebApp данные от пользователя {user.id}: {raw_data}")
         
         # ВРЕМЕННО: пропускаем верификацию для тестирования
         # TODO: включить верификацию в продакшене
@@ -207,7 +210,7 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         # Парсим JSON данные
         data = json.loads(update.message.web_app_data.data)
-        logger.info(f"Получены WebApp данные: {data}")
+        logger.info(f"Получены WebApp данные от {user.full_name}: {data}")
         
         # Валидируем данные
         steam_login = data.get('steam_login', '').strip()
@@ -256,7 +259,6 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         
         # Формируем сообщение для админа
-        user = update.effective_user
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Создаем кнопку "Выполнено"
