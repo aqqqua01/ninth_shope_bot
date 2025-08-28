@@ -10,6 +10,7 @@ import logging
 import hashlib
 import hmac
 import asyncio
+import base64
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import parse_qsl
@@ -252,6 +253,12 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
         data = json.loads(update.message.web_app_data.data)
         logger.info(f"Получены WebApp данные от {user.full_name}: {data}")
         
+        # Валидируем данные
+        login = data.get('login', '').strip()
+        if not login:
+            await update.message.reply_text("❌ Логин не может быть пустым. Попробуйте еще раз.")
+            return
+
         # Валидируем и пересчитываем сумму на сервере
         try:
             base_amount = parse_amount(str(data.get('amount', 0)))
@@ -264,6 +271,7 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Формируем простое сообщение для пользователя
         user_message = (
             f"✅ <b>Заявка принята!</b>\n\n"
+            f"👤 Логин: <code>{login}</code>\n"
             f"💰 Сумма: {base_amount} РУБ\n"
             f"💳 К оплате: <b>{total_rub} РУБ</b> (с комиссией {COMMISSION_PERCENT}%)\n"
             f"💎 Эквивалент: <b>{total_usdt} USDT</b>\n\n"
@@ -281,22 +289,25 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Формируем сообщение для админа
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Создаем кнопки для управления заявкой
+        # Создаем кнопки для управления заявкой  
+        # Используем base64 для кодирования логина чтобы избежать проблем с символами
+        encoded_login = base64.b64encode(login.encode()).decode()
+        
         keyboard = [
             [
                 InlineKeyboardButton(
                     "✅ Выполнено", 
-                    callback_data=f"completed_{user.id}_{update.effective_chat.id}_{total_rub}"
+                    callback_data=f"completed_{user.id}_{update.effective_chat.id}_{total_rub}_{encoded_login}"
                 ),
                 InlineKeyboardButton(
                     "🔄 В обработке", 
-                    callback_data=f"processing_{user.id}_{update.effective_chat.id}_{total_rub}"
+                    callback_data=f"processing_{user.id}_{update.effective_chat.id}_{total_rub}_{encoded_login}"
                 )
             ],
             [
                 InlineKeyboardButton(
                     "❌ Отклонить", 
-                    callback_data=f"reject_{user.id}_{update.effective_chat.id}_{total_rub}"
+                    callback_data=f"reject_{user.id}_{update.effective_chat.id}_{total_rub}_{encoded_login}"
                 )
             ]
         ]
@@ -309,6 +320,7 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"🆔 User ID: <code>{user.id}</code>\n"
             f"💬 Chat ID: <code>{update.effective_chat.id}</code>\n\n"
             f"📋 <b>Данные заявки:</b>\n"
+            f"👤 Логин: <code>{login}</code>\n"
             f"💰 Исходная сумма: {base_amount} РУБ\n"
             f"💳 К оплате: <b>{total_rub} РУБ</b> (комиссия {COMMISSION_PERCENT}%)\n"
             f"💎 Эквивалент: <b>{total_usdt} USDT</b>\n"
@@ -341,7 +353,7 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception as e:
                 logger.error(f"Ошибка отправки в дополнительный чат: {e}")
         
-        logger.info(f"Обработана заявка от пользователя {user.id}: {base_amount} РУБ -> {total_rub} РУБ ({COMMISSION_PERCENT}%) = {total_usdt} USDT")
+        logger.info(f"Обработана заявка от пользователя {user.id} (логин: {login}): {base_amount} РУБ -> {total_rub} РУБ ({COMMISSION_PERCENT}%) = {total_usdt} USDT")
         
     except json.JSONDecodeError:
         logger.error("Ошибка парсинга JSON данных от WebApp")
@@ -362,11 +374,24 @@ async def handle_completion_callback(update: Update, context: ContextTypes.DEFAU
     
     try:
         # Парсим данные из callback_data
-        _, user_id, chat_id, amount = query.data.split('_', 3)
+        parts = query.data.split('_')
+        if len(parts) >= 5:
+            _, user_id, chat_id, amount, encoded_login = parts[0], parts[1], parts[2], parts[3], parts[4]
+            
+            # Декодируем логин
+            try:
+                login = base64.b64decode(encoded_login.encode()).decode()
+            except:
+                login = "неизвестен"
+        else:
+            # Старый формат без логина
+            _, user_id, chat_id, amount = query.data.split('_', 3)
+            login = "неизвестен"
         
         # Отправляем уведомление пользователю
         completion_message = (
             f"✅ <b>Пополнение выполнено!</b>\n\n"
+            f"👤 Логин: <code>{login}</code>\n"
             f"💳 Сумма к оплате: {amount} РУБ\n\n"
             f"💡 Спасибо за использование нашего сервиса!\n"
             f"❓ Если возникли вопросы, обращайтесь к администратору."
@@ -384,7 +409,7 @@ async def handle_completion_callback(update: Update, context: ContextTypes.DEFAU
             parse_mode='HTML'
         )
         
-        logger.info(f"Отправлено уведомление о выполнении пользователю {user_id}")
+        logger.info(f"Отправлено уведомление о выполнении пользователю {user_id} (логин: {login})")
         
     except Exception as e:
         logger.error(f"Ошибка при обработке завершения: {e}")
@@ -401,11 +426,24 @@ async def handle_processing_callback(update: Update, context: ContextTypes.DEFAU
     
     try:
         # Парсим данные из callback_data
-        _, user_id, chat_id, amount = query.data.split('_', 3)
+        parts = query.data.split('_')
+        if len(parts) >= 5:
+            _, user_id, chat_id, amount, encoded_login = parts[0], parts[1], parts[2], parts[3], parts[4]
+            
+            # Декодируем логин
+            try:
+                login = base64.b64decode(encoded_login.encode()).decode()
+            except:
+                login = "неизвестен"
+        else:
+            # Старый формат без логина
+            _, user_id, chat_id, amount = query.data.split('_', 3)
+            login = "неизвестен"
         
         # Отправляем уведомление пользователю
         processing_message = (
             f"🔄 <b>Ваша заявка в обработке</b>\n\n"
+            f"👤 Логин: <code>{login}</code>\n"
             f"💳 Сумма к оплате: {amount} РУБ\n\n"
             f"⏳ Пожалуйста, ожидайте.\n"
             f"📞 С вами свяжется оператор для завершения операции."
@@ -423,7 +461,7 @@ async def handle_processing_callback(update: Update, context: ContextTypes.DEFAU
             parse_mode='HTML'
         )
         
-        logger.info(f"Заявка пользователя {user_id} помечена как 'в обработке'")
+        logger.info(f"Заявка пользователя {user_id} (логин: {login}) помечена как 'в обработке'")
         
     except Exception as e:
         logger.error(f"Ошибка при обработке статуса 'в обработке': {e}")
@@ -440,11 +478,24 @@ async def handle_reject_callback(update: Update, context: ContextTypes.DEFAULT_T
     
     try:
         # Парсим данные из callback_data
-        _, user_id, chat_id, amount = query.data.split('_', 3)
+        parts = query.data.split('_')
+        if len(parts) >= 5:
+            _, user_id, chat_id, amount, encoded_login = parts[0], parts[1], parts[2], parts[3], parts[4]
+            
+            # Декодируем логин
+            try:
+                login = base64.b64decode(encoded_login.encode()).decode()
+            except:
+                login = "неизвестен"
+        else:
+            # Старый формат без логина
+            _, user_id, chat_id, amount = query.data.split('_', 3)
+            login = "неизвестен"
         
         # Отправляем уведомление пользователю
         reject_message = (
             f"❌ <b>Заявка отклонена</b>\n\n"
+            f"👤 Логин: <code>{login}</code>\n"
             f"💳 Сумма к оплате: {amount} РУБ\n\n"
             f"😔 К сожалению, ваша заявка не может быть обработана.\n"
             f"📞 Если у вас есть вопросы, обратитесь к администратору."
@@ -462,7 +513,7 @@ async def handle_reject_callback(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode='HTML'
         )
         
-        logger.info(f"Заявка пользователя {user_id} отклонена")
+        logger.info(f"Заявка пользователя {user_id} (логин: {login}) отклонена")
         
     except Exception as e:
         logger.error(f"Ошибка при отклонении заявки: {e}")
