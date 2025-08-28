@@ -41,8 +41,9 @@ USDT_RATE = float(os.getenv('USDT_RATE', '95.0'))  # 1 USDT = 95 RUB по умо
 # Комиссия в процентах
 COMMISSION_PERCENT = float(os.getenv('COMMISSION_PERCENT', '15.0'))  # 15% по умолчанию
 
-# Хранилище для курса (можно изменять через команды)
+# Хранилища для значений (можно изменять через команды)
 current_usdt_rate = USDT_RATE
+current_commission_percent = COMMISSION_PERCENT
 
 # Проверка обязательных переменных
 if not BOT_TOKEN:
@@ -101,7 +102,7 @@ def calculate_total_with_commission(base_amount: Decimal) -> Decimal:
     """
     Вычисляет итоговую сумму к оплате с комиссией
     """
-    commission_multiplier = Decimal('1') + (Decimal(str(COMMISSION_PERCENT)) / Decimal('100'))
+    commission_multiplier = Decimal('1') + (Decimal(str(current_commission_percent)) / Decimal('100'))
     total = base_amount * commission_multiplier
     return total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
@@ -152,18 +153,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/help - Показать эту справку\n"
         "/cancel - Отменить текущую операцию\n"
         "/admin - Информация для администратора\n"
-        "/setrate - Изменить курс USDT (только админ)\n\n"
+        "/setrate - Изменить курс USDT (только админ)\n"
+        "/setcommission - Изменить комиссию (только админ)\n\n"
         f"💡 <b>Как оформить заказ:</b>\n"
         f"1. Нажми кнопку 'Оформить пополнение'\n"
         f"2. Укажи логин и сумму в рублях\n"
-        f"3. Система покажет сумму к оплате с комиссией {COMMISSION_PERCENT}%\n"
+        f"3. Система покажет сумму к оплате с комиссией {current_commission_percent}%\n"
         f"4. Подтверди заказ\n"
         f"5. Ожидай принятия заказа оператором\n"
         f"6. После принятия - получишь реквизиты для оплаты\n"
         f"7. После оплаты заказ будет завершен\n\n"
         f"💰 <b>Способ оплаты:</b> Криптовалюта (USDT)\n"
         f"💱 <b>Текущий курс:</b> 1 USDT = {current_usdt_rate} РУБ\n"
-        f"📈 <b>Комиссия:</b> {COMMISSION_PERCENT}%\n"
+        f"📈 <b>Комиссия:</b> {current_commission_percent}%\n"
         f"💵 <b>Минимальная сумма:</b> 100 РУБ"
     )
     
@@ -208,7 +210,7 @@ async def set_rate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not context.args:
         await update.message.reply_text(
             f"💱 <b>Текущий курс USDT:</b> 1 USDT = {current_usdt_rate} РУБ\n"
-            f"📈 <b>Комиссия:</b> {COMMISSION_PERCENT}%\n\n"
+            f"📈 <b>Комиссия:</b> {current_commission_percent}%\n\n"
             f"Для изменения курса используйте:\n"
             f"<code>/setrate 95.5</code>",
             parse_mode='HTML'
@@ -237,6 +239,52 @@ async def set_rate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(
             "❌ Неверный формат курса.\n"
             "Используйте: <code>/setrate 95.5</code>",
+            parse_mode='HTML'
+        )
+
+
+async def set_commission_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик команды /setcommission для изменения комиссии"""
+    global current_commission_percent
+    
+    # Проверяем что это администратор
+    if str(update.effective_user.id) != ADMIN_CHAT_ID.lstrip('-'):
+        await update.message.reply_text("❌ Эта команда доступна только администратору.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text(
+            f"💰 <b>Текущая комиссия:</b> {current_commission_percent}%\n"
+            f"💱 <b>Курс USDT:</b> 1 USDT = {current_usdt_rate} РУБ\n\n"
+            f"Для изменения комиссии используйте:\n"
+            f"<code>/setcommission 15</code>\n"
+            f"<code>/setcommission 12.5</code>",
+            parse_mode='HTML'
+        )
+        return
+    
+    try:
+        new_commission = float(context.args[0])
+        if new_commission < 0 or new_commission > 100:
+            raise ValueError("Комиссия должна быть от 0 до 100%")
+        
+        old_commission = current_commission_percent
+        current_commission_percent = new_commission
+        
+        await update.message.reply_text(
+            f"✅ <b>Комиссия обновлена!</b>\n\n"
+            f"📉 Старая комиссия: {old_commission}%\n"
+            f"📈 Новая комиссия: {new_commission}%\n\n"
+            f"🔄 Изменения применяются ко всем новым заказам",
+            parse_mode='HTML'
+        )
+        
+        logger.info(f"Администратор {update.effective_user.id} изменил комиссию с {old_commission}% на {new_commission}%")
+        
+    except (ValueError, IndexError):
+        await update.message.reply_text(
+            "❌ Неверный формат комиссии.\n"
+            "Используйте числа от 0 до 100: <code>/setcommission 15</code>",
             parse_mode='HTML'
         )
 
@@ -275,7 +323,7 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"🔄 <b>Заявка в обработке</b>\n\n"
             f"👤 Логин: <code>{login}</code>\n"
             f"💰 Сумма: {base_amount} РУБ\n"
-            f"💳 К оплате: <b>{total_rub} РУБ</b> (с комиссией {COMMISSION_PERCENT}%)\n"
+            f"💳 К оплате: <b>{total_rub} РУБ</b> (с комиссией {current_commission_percent}%)\n"
             f"💎 Эквивалент: <b>{total_usdt} USDT</b>\n\n"
             f"⏳ <b>Ваша заявка рассматривается</b>\n"
             f"📱 Ожидайте подтверждения от оператора\n\n"
@@ -319,7 +367,7 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"📋 <b>Данные заказа:</b>\n"
             f"👤 Логин: <code>{login}</code>\n"
             f"💰 Исходная сумма: {base_amount} РУБ\n"
-            f"💳 К оплате: <b>{total_rub} РУБ</b> (комиссия {COMMISSION_PERCENT}%)\n"
+            f"💳 К оплате: <b>{total_rub} РУБ</b> (комиссия {current_commission_percent}%)\n"
             f"💎 Эквивалент: <b>{total_usdt} USDT</b>\n"
             f"💱 Курс: 1 USDT = {current_usdt_rate} РУБ\n\n"
             f"📊 <b>Техническая информация:</b>\n"
@@ -350,7 +398,7 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception as e:
                 logger.error(f"Ошибка отправки в дополнительный чат: {e}")
         
-        logger.info(f"Создан новый заказ от пользователя {user.id} (логин: {login}): {base_amount} РУБ -> {total_rub} РУБ ({COMMISSION_PERCENT}%) = {total_usdt} USDT")
+        logger.info(f"Создан новый заказ от пользователя {user.id} (логин: {login}): {base_amount} РУБ -> {total_rub} РУБ ({current_commission_percent}%) = {total_usdt} USDT")
         
     except json.JSONDecodeError:
         logger.error("Ошибка парсинга JSON данных от WebApp")
@@ -561,6 +609,7 @@ async def main_async():
     application.add_handler(CommandHandler("cancel", cancel_command))
     application.add_handler(CommandHandler("admin", admin_command))
     application.add_handler(CommandHandler("setrate", set_rate_command))
+    application.add_handler(CommandHandler("setcommission", set_commission_command))
     
     # Обработчик WebApp данных
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_webapp_data))
@@ -575,7 +624,7 @@ async def main_async():
     
     logger.info("Бот запущен и готов к работе!")
     logger.info(f"Текущий курс USDT: 1 USDT = {current_usdt_rate} РУБ")
-    logger.info(f"Комиссия: {COMMISSION_PERCENT}%")
+    logger.info(f"Комиссия: {current_commission_percent}%")
     
     # Запускаем бота
     async with application:
