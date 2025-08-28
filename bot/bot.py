@@ -225,19 +225,35 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text(f"❌ {e}")
             return
         
-        # Формируем сообщение для пользователя
+        # Формируем сообщение для пользователя с кнопками выбора оплаты
         user_message = (
             f"✅ <b>Заявка на пополнение принята!</b>\n\n"
             f"🎮 Логин Steam: <code>{steam_login}</code>\n"
             f"💰 Сумма пополнения: {base_amount} {CURRENCY}\n"
-            f"💳 К оплате (+15%): <b>{to_pay} {CURRENCY}</b>\n\n"
-            f"💳 <b>Реквизиты для оплаты:</b>\n"
-            f"<code>{PAYMENT_DETAILS}</code>\n\n"
+            f"💳 К оплате: <b>{to_pay} {CURRENCY}</b>\n\n"
+            f"💎 <b>Выберите способ оплаты:</b>\n"
+            f"• Криптовалютой (USDT, TON, BTC, ETH, LTC, BNB)\n"
+            f"• Традиционным переводом\n\n"
             f"⏳ После оплаты пополнение поступит в течение 30 минут.\n"
             f"❓ Вопросы? Обращайтесь к администратору."
         )
         
-        await update.message.reply_text(user_message, parse_mode='HTML')
+        # Создаем кнопки для выбора способа оплаты
+        user_keyboard = [
+            [
+                InlineKeyboardButton("💰 Оплатить криптовалютой", callback_data=f"crypto_pay_{user.id}_{steam_login}_{base_amount}_{to_pay}")
+            ],
+            [
+                InlineKeyboardButton("💳 Традиционная оплата", callback_data=f"manual_pay_{user.id}")
+            ]
+        ]
+        user_reply_markup = InlineKeyboardMarkup(user_keyboard)
+        
+        await update.message.reply_text(
+            user_message, 
+            parse_mode='HTML',
+            reply_markup=user_reply_markup
+        )
         
         # Формируем сообщение для админа
         user = update.effective_user
@@ -472,6 +488,163 @@ async def run_webhook_server():
     except Exception as e:
         logger.error(f"Ошибка webhook сервера: {e}")
 
+async def handle_crypto_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор криптооплаты"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        # Парсим данные из callback
+        parts = query.data.split('_')
+        if len(parts) < 6:
+            await query.edit_message_text("❌ Ошибка в данных заказа.")
+            return
+            
+        user_id = int(parts[2])
+        steam_login = parts[3]
+        base_amount = float(parts[4])
+        to_pay = float(parts[5])
+        
+        if not crypto_pay_api:
+            await query.edit_message_text(
+                "❌ Криптоплатежи временно недоступны.\n"
+                "Воспользуйтесь традиционной оплатой.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("💳 Традиционная оплата", callback_data=f"manual_pay_{user_id}")
+                ]])
+            )
+            return
+        
+        # Создаем инвойс в Crypto Pay
+        description = f"Steam пополнение: {steam_login}"
+        
+        try:
+            invoice_data = await crypto_pay_api.create_invoice(
+                currency_type="fiat",
+                fiat="RUB",
+                amount=str(to_pay),
+                accepted_assets="USDT,TON,BTC,ETH,LTC,BNB",
+                description=description,
+                payload=f"user:{user_id}"
+            )
+            
+            if invoice_data and 'result' in invoice_data:
+                invoice = invoice_data['result']
+                invoice_id = invoice['invoice_id']
+                pay_url = invoice['pay_url']
+                
+                crypto_message = (
+                    f"💰 <b>Инвойс для криптооплаты создан!</b>\n\n"
+                    f"🎮 Логин Steam: <code>{steam_login}</code>\n"
+                    f"💰 Сумма: <b>{to_pay} {CURRENCY}</b>\n\n"
+                    f"💎 <b>Доступные криптовалюты:</b>\n"
+                    f"• USDT, TON, BTC, ETH, LTC, BNB\n\n"
+                    f"📋 ID инвойса: <code>{invoice_id}</code>\n\n"
+                    f"👆 Нажмите кнопку ниже для оплаты:"
+                )
+                
+                keyboard = [
+                    [InlineKeyboardButton("💰 Перейти к оплате", url=pay_url)],
+                    [InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_payment_{user_id}")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(
+                    crypto_message,
+                    parse_mode='HTML',
+                    reply_markup=reply_markup
+                )
+                
+                logger.info(f"Создан криптоинвойс {invoice_id} для пользователя {user_id}")
+                
+            else:
+                raise Exception("Неверный ответ API")
+                
+        except Exception as e:
+            logger.error(f"Ошибка создания инвойса: {e}")
+            await query.edit_message_text(
+                "❌ Ошибка создания криптоинвойса.\n"
+                "Попробуйте позже или выберите традиционную оплату.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("💳 Традиционная оплата", callback_data=f"manual_pay_{user_id}")
+                ]])
+            )
+            
+    except Exception as e:
+        logger.error(f"Ошибка обработки криптооплаты: {e}")
+        await query.edit_message_text("❌ Произошла ошибка. Попробуйте еще раз.")
+
+async def handle_manual_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор традиционной оплаты"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        # Показываем реквизиты для ручной оплаты
+        manual_message = (
+            f"💳 <b>Традиционная оплата</b>\n\n"
+            f"📝 <b>Реквизиты для оплаты:</b>\n"
+            f"<code>{PAYMENT_DETAILS}</code>\n\n"
+            f"⏳ После оплаты пополнение поступит в течение 30 минут.\n"
+            f"❓ Вопросы? Обращайтесь к администратору.\n\n"
+            f"💰 Или выберите криптооплату:"
+        )
+        
+        user_id = query.data.split('_')[2]
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад к способам оплаты", callback_data=f"back_to_payment_{user_id}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            manual_message,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка обработки ручной оплаты: {e}")
+        await query.edit_message_text("❌ Произошла ошибка. Попробуйте еще раз.")
+
+async def handle_cancel_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает отмену платежа"""
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text(
+        "❌ <b>Платеж отменен</b>\n\n"
+        "Вы можете создать новую заявку, отправив /start",
+        parse_mode='HTML'
+    )
+
+async def handle_back_to_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Возвращает к выбору способа оплаты"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.data.split('_')[3]
+    
+    # Возвращаем исходное сообщение с выбором способа оплаты
+    payment_message = (
+        f"💎 <b>Выберите способ оплаты:</b>\n\n"
+        f"• Криптовалютой (USDT, TON, BTC, ETH, LTC, BNB)\n"
+        f"• Традиционным переводом\n\n"
+        f"⏳ После оплаты пополнение поступит в течение 30 минут.\n"
+        f"❓ Вопросы? Обращайтесь к администратору."
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("💰 Оплатить криптовалютой", callback_data=f"crypto_pay_reselect_{user_id}")],
+        [InlineKeyboardButton("💳 Традиционная оплата", callback_data=f"manual_pay_{user_id}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        payment_message,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
 async def main_async():
     """Асинхронная главная функция"""
     global telegram_app
@@ -493,6 +666,12 @@ async def main_async():
     
     # Обработчик кнопки "Выполнено"
     application.add_handler(CallbackQueryHandler(handle_completion_callback, pattern="^completed_"))
+    
+    # Обработчики способов оплаты
+    application.add_handler(CallbackQueryHandler(handle_crypto_payment, pattern="^crypto_pay_"))
+    application.add_handler(CallbackQueryHandler(handle_manual_payment, pattern="^manual_pay_"))
+    application.add_handler(CallbackQueryHandler(handle_cancel_payment, pattern="^cancel_payment_"))
+    application.add_handler(CallbackQueryHandler(handle_back_to_payment, pattern="^back_to_payment_"))
     
     # Обработчик всех остальных сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_unknown_message))
