@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Пополнение Steam</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="config.js"></script>
     <style>
         * {
             margin: 0;
@@ -264,18 +265,18 @@
         const loginError = document.getElementById('loginError');
         const amountError = document.getElementById('amountError');
 
-        // Конфигурация (в реальном приложении получать из env)
-        const CONFIG = {
+        // Використовуємо конфігурацію з config.js
+        const CONFIG = window.WEBAPP_CONFIG || {
             currency: 'UAH',
             commissionRate: 0.15,
-            paymentDetails: `Номер карты: 4441 1144 1111 1111
+            defaultPaymentDetails: `Номер карти: 4441 1144 1111 1111
 Получатель: Иван Иванов
 Банк: ПриватБанк`
         };
 
-        // Устанавливаем валюту и реквизиты
+        // Встановлюємо валюту та реквізити
         currencySpan.textContent = CONFIG.currency;
-        paymentDetailsElement.textContent = CONFIG.paymentDetails;
+        paymentDetailsElement.textContent = CONFIG.defaultPaymentDetails;
 
         // Функция парсинга суммы
         function parseAmount(amountStr) {
