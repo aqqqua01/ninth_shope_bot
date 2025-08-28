@@ -498,14 +498,14 @@ async def handle_crypto_payment(update: Update, context: ContextTypes.DEFAULT_TY
     try:
         # Парсим данные из callback
         parts = query.data.split('_')
-        if len(parts) < 6:
+        if len(parts) < 5:
             await query.edit_message_text("❌ Ошибка в данных заказа.")
             return
             
         user_id = int(parts[2])
         steam_login = parts[3]
         base_amount = float(parts[4])
-        to_pay = float(parts[5])
+        to_pay = float(parts[5]) if len(parts) > 5 else float(parts[4]) * 1.15
         
         if not crypto_pay_api:
             await query.edit_message_text(
