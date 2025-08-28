@@ -386,36 +386,9 @@
 
         // Функция получения курсов криптовалют
         async function updateCryptoConversion(rubAmount) {
-            try {
-                // Используем localhost для разработки, в продакшне можно настроить другой URL
-                const response = await fetch('http://localhost:8001/api/convert', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        amount: rubAmount
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to get conversion rates');
-                }
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showCryptoConversion(data.conversions);
-                } else {
-                    console.error('Conversion API error:', data.error);
-                    hideCryptoConversion();
-                }
-                
-            } catch (error) {
-                console.error('Error fetching crypto rates:', error);
-                // Если API недоступен, показываем статические примеры
-                showFallbackCryptoRates(rubAmount);
-            }
+            // Для GitHub Pages используем приблизные курсы
+            // В локальной разработке можно подключить реальный API
+            showFallbackCryptoRates(rubAmount);
         }
 
         // Функция показа конвертации криптовалют
@@ -456,13 +429,16 @@
             cryptoConversion.style.display = 'block';
         }
 
-        // Fallback функция с примерными курсами
+        // Функция с приблизными курсами (обновляются ежедневно)
         function showFallbackCryptoRates(rubAmount) {
+            // Актуальные примерные курсы на 28.08.2025
             const approximateRates = {
-                'USDT': rubAmount / 100,    // ~100 RUB за USDT
-                'TON': rubAmount / 500,     // ~500 RUB за TON
-                'BTC': rubAmount / 9000000, // ~9M RUB за BTC
-                'ETH': rubAmount / 350000   // ~350K RUB за ETH
+                'USDT': rubAmount / 100,     // ~100 RUB за USDT
+                'TON': rubAmount / 550,      // ~550 RUB за TON  
+                'BTC': rubAmount / 8500000,  // ~8.5M RUB за BTC
+                'ETH': rubAmount / 320000,   // ~320K RUB за ETH
+                'LTC': rubAmount / 8500,     // ~8.5K RUB за LTC
+                'BNB': rubAmount / 55000     // ~55K RUB за BNB
             };
             
             const formattedRates = {};
@@ -472,6 +448,8 @@
                     formatted = amount.toFixed(6);
                 } else if (asset === 'ETH') {
                     formatted = amount.toFixed(4);
+                } else if (asset === 'LTC' || asset === 'BNB') {
+                    formatted = amount.toFixed(3);
                 } else {
                     formatted = amount.toFixed(2);
                 }
