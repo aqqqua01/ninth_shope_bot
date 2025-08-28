@@ -16,6 +16,7 @@ from urllib.parse import parse_qsl
 from telegram import Update, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from dotenv import load_dotenv
+from crypto_pay import init_crypto_pay, crypto_pay_api, currency_converter
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -34,6 +35,8 @@ FORWARD_CHAT_ID = os.getenv('FORWARD_CHAT_ID')
 PAYMENT_DETAILS = os.getenv('PAYMENT_DETAILS', 'Реквизиты не настроены')
 CURRENCY = os.getenv('CURRENCY', 'РУБ')
 WEBAPP_URL = os.getenv('WEBAPP_URL')
+CRYPTO_PAY_API_TOKEN = os.getenv('CRYPTO_PAY_API_TOKEN')
+CRYPTO_PAY_TESTNET = os.getenv('CRYPTO_PAY_TESTNET', 'true').lower() == 'true'
 
 # Проверка обязательных переменных
 if not BOT_TOKEN:
@@ -46,6 +49,16 @@ if not ADMIN_CHAT_ID:
 
 if not WEBAPP_URL:
     logger.warning("WEBAPP_URL не установлен - WebApp кнопка будет скрыта")
+
+# Инициализация Crypto Pay API
+if CRYPTO_PAY_API_TOKEN:
+    try:
+        init_crypto_pay(CRYPTO_PAY_API_TOKEN, CRYPTO_PAY_TESTNET)
+        logger.info("Crypto Pay API инициализирован успешно")
+    except Exception as e:
+        logger.error(f"Ошибка инициализации Crypto Pay API: {e}")
+else:
+    logger.warning("CRYPTO_PAY_API_TOKEN не установлен - криптоплатежи отключены")
 
 
 def verify_webapp_data(init_data: str, bot_token: str) -> bool:

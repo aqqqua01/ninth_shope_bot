@@ -182,6 +182,42 @@
             color: var(--tg-theme-button-color, #0088cc);
         }
 
+        .crypto-conversion {
+            background: var(--tg-theme-secondary-bg-color, #f8f9fa);
+            border: 1px solid var(--tg-theme-button-color, #0088cc);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+
+        .crypto-conversion h3 {
+            margin-bottom: 12px;
+            color: var(--tg-theme-text-color, #000000);
+            font-size: 16px;
+        }
+
+        .crypto-rate {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+        }
+
+        .crypto-rate:last-child {
+            border-bottom: none;
+        }
+
+        .crypto-symbol {
+            font-weight: 600;
+            color: var(--tg-theme-button-color, #0088cc);
+        }
+
+        .crypto-amount {
+            font-family: monospace;
+            color: var(--tg-theme-text-color, #000000);
+        }
+
         @media (max-width: 480px) {
             .container {
                 padding: 0 10px;
@@ -229,6 +265,11 @@
 
             <div class="total-display">
                 К оплате: <span id="totalAmount">0.00</span> <span class="currency" id="currency">РУБ</span>
+            </div>
+
+            <div class="crypto-conversion" id="cryptoConversion" style="display: none;">
+                <h3>💎 Варианты оплаты криптовалютой:</h3>
+                <div id="cryptoRates"></div>
             </div>
 
             <div class="payment-details">
@@ -331,9 +372,119 @@
             
             totalAmountSpan.textContent = total.toFixed(2);
             
+            // Показываем конвертацию в криптовалюты
+            if (baseAmount >= 100) {
+                updateCryptoConversion(total);
+            } else {
+                hideCryptoConversion();
+            }
+            
             // Обновляем состояние кнопки
             const isFormValid = validateForm();
             submitBtn.disabled = !isFormValid;
+        }
+
+        // Функция получения курсов криптовалют
+        async function updateCryptoConversion(rubAmount) {
+            try {
+                // Используем localhost для разработки, в продакшне можно настроить другой URL
+                const response = await fetch('http://localhost:8001/api/convert', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        amount: rubAmount
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to get conversion rates');
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showCryptoConversion(data.conversions);
+                } else {
+                    console.error('Conversion API error:', data.error);
+                    hideCryptoConversion();
+                }
+                
+            } catch (error) {
+                console.error('Error fetching crypto rates:', error);
+                // Если API недоступен, показываем статические примеры
+                showFallbackCryptoRates(rubAmount);
+            }
+        }
+
+        // Функция показа конвертации криптовалют
+        function showCryptoConversion(conversions) {
+            const cryptoConversion = document.getElementById('cryptoConversion');
+            const cryptoRates = document.getElementById('cryptoRates');
+            
+            cryptoRates.innerHTML = '';
+            
+            // Порядок отображения валют
+            const order = ['USDT', 'TON', 'BTC', 'ETH'];
+            const sortedConversions = {};
+            
+            // Сначала добавляем валюты в нужном порядке
+            order.forEach(asset => {
+                if (conversions[asset]) {
+                    sortedConversions[asset] = conversions[asset];
+                }
+            });
+            
+            // Затем добавляем остальные
+            Object.keys(conversions).forEach(asset => {
+                if (!sortedConversions[asset]) {
+                    sortedConversions[asset] = conversions[asset];
+                }
+            });
+            
+            Object.entries(sortedConversions).forEach(([asset, data]) => {
+                const rateDiv = document.createElement('div');
+                rateDiv.className = 'crypto-rate';
+                rateDiv.innerHTML = `
+                    <span class="crypto-symbol">${asset}</span>
+                    <span class="crypto-amount">${data.amount}</span>
+                `;
+                cryptoRates.appendChild(rateDiv);
+            });
+            
+            cryptoConversion.style.display = 'block';
+        }
+
+        // Fallback функция с примерными курсами
+        function showFallbackCryptoRates(rubAmount) {
+            const approximateRates = {
+                'USDT': rubAmount / 100,    // ~100 RUB за USDT
+                'TON': rubAmount / 500,     // ~500 RUB за TON
+                'BTC': rubAmount / 9000000, // ~9M RUB за BTC
+                'ETH': rubAmount / 350000   // ~350K RUB за ETH
+            };
+            
+            const formattedRates = {};
+            Object.entries(approximateRates).forEach(([asset, amount]) => {
+                let formatted;
+                if (asset === 'BTC') {
+                    formatted = amount.toFixed(6);
+                } else if (asset === 'ETH') {
+                    formatted = amount.toFixed(4);
+                } else {
+                    formatted = amount.toFixed(2);
+                }
+                
+                formattedRates[asset] = { amount: formatted };
+            });
+            
+            showCryptoConversion(formattedRates);
+        }
+
+        // Функция скрытия конвертации
+        function hideCryptoConversion() {
+            document.getElementById('cryptoConversion').style.display = 'none';
         }
 
         // Обработчики событий
