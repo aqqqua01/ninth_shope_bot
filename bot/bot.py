@@ -223,6 +223,15 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user = update.effective_user
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        # Создаем кнопку "Выполнено"
+        keyboard = [
+            [InlineKeyboardButton(
+                "✅ Выполнено", 
+                callback_data=f"completed_{user.id}_{update.effective_chat.id}_{base_amount}_{steam_login}"
+            )]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         admin_message = (
             f"🔔 <b>НОВАЯ ЗАЯВКА НА ПОПОЛНЕНИЕ</b>\n\n"
             f"⏰ Время: {timestamp}\n"
