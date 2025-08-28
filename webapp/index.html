@@ -220,15 +220,15 @@
                     type="text" 
                     id="baseAmount" 
                     class="form-input"
-                    placeholder="Введите сумму (например: 100 или 100,50)"
+                    placeholder="Введите сумму (минимум 100 рублей)"
                     required
                     autocomplete="off"
                 >
-                <div class="error-message" id="amountError">Введите корректную сумму больше 0</div>
+                <div class="error-message" id="amountError">Минимальная сумма: 100 РУБ</div>
             </div>
 
             <div class="total-display">
-                К оплате (+15%): <span id="totalAmount">0.00</span> <span class="currency" id="currency">UAH</span>
+                К оплате: <span id="totalAmount">0.00</span> <span class="currency" id="currency">РУБ</span>
             </div>
 
             <div class="payment-details">
@@ -312,7 +312,9 @@
 
             // Валидация суммы
             const baseAmount = parseAmount(baseAmountInput.value);
-            if (baseAmount <= 0) {
+            const minAmount = CONFIG.validation?.minAmount || 100;
+            if (baseAmount < minAmount) {
+                amountError.textContent = `Минимальная сумма: ${minAmount} РУБ`;
                 amountError.style.display = 'block';
                 baseAmountInput.style.borderColor = '#e74c3c';
                 isValid = false;

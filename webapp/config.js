@@ -2,15 +2,13 @@
 // Цей файл буде використовуватися для налаштування webapp
 const WEBAPP_CONFIG = {
     // Валюта за замовчуванням
-    currency: 'UAH',
+    currency: 'РУБ',
     
     // Відсоток комісії
     commissionRate: 0.15,
     
-    // Реквізити для оплати за замовчуванням (можна перевизначити через env)
-    defaultPaymentDetails: `Номер карти: 4441 1144 1111 1111
-Отримувач: Іван Іванов
-Банк: ПриватБанк`,
+    // Реквізити для оплати за замовчуванням (будуть показані після підтвердження)
+    defaultPaymentDetails: `Реквізити будуть надіслані після підтвердження заявки`,
 
     // Налаштування UI
     ui: {
@@ -22,8 +20,8 @@ const WEBAPP_CONFIG = {
     
     // Валідація
     validation: {
-        minAmount: 1,
-        maxAmount: 10000,
+        minAmount: 100,
+        maxAmount: 50000,
         loginMinLength: 3,
         loginMaxLength: 50
     }
