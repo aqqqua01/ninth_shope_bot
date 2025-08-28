@@ -153,13 +153,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/cancel - Отменить текущую операцию\n"
         "/admin - Информация для администратора\n"
         "/setrate - Изменить курс USDT (только админ)\n\n"
-        f"💡 <b>Как оформить пополнение:</b>\n"
+        f"💡 <b>Как оформить заказ:</b>\n"
         f"1. Нажми кнопку 'Оформить пополнение'\n"
-        f"2. Укажи нужную сумму в рублях\n"
+        f"2. Укажи логин и сумму в рублях\n"
         f"3. Система покажет сумму к оплате с комиссией {COMMISSION_PERCENT}%\n"
-        f"4. Ниже будет показан эквивалент в USDT\n"
-        f"5. Подтверди заявку\n"
-        f"6. С тобой свяжется оператор и предоставит реквизиты\n\n"
+        f"4. Подтверди заказ\n"
+        f"5. Ожидай принятия заказа оператором\n"
+        f"6. После принятия - получишь реквизиты для оплаты\n"
+        f"7. После оплаты заказ будет завершен\n\n"
         f"💰 <b>Способ оплаты:</b> Криптовалюта (USDT)\n"
         f"💱 <b>Текущий курс:</b> 1 USDT = {current_usdt_rate} РУБ\n"
         f"📈 <b>Комиссия:</b> {COMMISSION_PERCENT}%\n"
@@ -269,17 +270,16 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text(f"❌ {e}")
             return
         
-        # Формируем простое сообщение для пользователя
+        # Формируем сообщение о том что заявка в обработке
         user_message = (
-            f"✅ <b>Заявка принята!</b>\n\n"
+            f"🔄 <b>Заявка в обработке</b>\n\n"
             f"👤 Логин: <code>{login}</code>\n"
             f"💰 Сумма: {base_amount} РУБ\n"
             f"💳 К оплате: <b>{total_rub} РУБ</b> (с комиссией {COMMISSION_PERCENT}%)\n"
             f"💎 Эквивалент: <b>{total_usdt} USDT</b>\n\n"
-            f"🔐 <b>Способ оплаты:</b> Криптовалюта\n\n"
-            f"👨‍💼 <b>С вами свяжется человек</b>\n"
-            f"📋 Он предоставит точные реквизиты для оплаты\n\n"
-            f"⏳ Время обработки: до 30 минут"
+            f"⏳ <b>Ваша заявка рассматривается</b>\n"
+            f"📱 Ожидайте подтверждения от оператора\n\n"
+            f"🕐 Время обработки: до 30 минут"
         )
         
         await update.message.reply_text(
@@ -297,12 +297,8 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
         keyboard = [
             [
                 InlineKeyboardButton(
-                    "✅ Выполнено", 
-                    callback_data=f"completed_{user.id}_{update.effective_chat.id}_{total_rub}_{encoded_login}"
-                ),
-                InlineKeyboardButton(
-                    "🔄 В обработке", 
-                    callback_data=f"processing_{user.id}_{update.effective_chat.id}_{total_rub}_{encoded_login}"
+                    "✅ Принять заказ", 
+                    callback_data=f"accept_{user.id}_{update.effective_chat.id}_{total_rub}_{encoded_login}"
                 )
             ],
             [
@@ -315,12 +311,12 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         admin_message = (
-            f"🔔 <b>НОВАЯ ЗАЯВКА НА ПОПОЛНЕНИЕ</b>\n\n"
+            f"🔔 <b>НОВЫЙ ЗАКАЗ НА ПОПОЛНЕНИЕ</b>\n\n"
             f"⏰ Время: {timestamp}\n"
             f"👤 Пользователь: {user.full_name} (@{user.username or 'без username'})\n"
             f"🆔 User ID: <code>{user.id}</code>\n"
             f"💬 Chat ID: <code>{update.effective_chat.id}</code>\n\n"
-            f"📋 <b>Данные заявки:</b>\n"
+            f"📋 <b>Данные заказа:</b>\n"
             f"👤 Логин: <code>{login}</code>\n"
             f"💰 Исходная сумма: {base_amount} РУБ\n"
             f"💳 К оплате: <b>{total_rub} РУБ</b> (комиссия {COMMISSION_PERCENT}%)\n"
@@ -354,7 +350,7 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception as e:
                 logger.error(f"Ошибка отправки в дополнительный чат: {e}")
         
-        logger.info(f"Обработана заявка от пользователя {user.id} (логин: {login}): {base_amount} РУБ -> {total_rub} РУБ ({COMMISSION_PERCENT}%) = {total_usdt} USDT")
+        logger.info(f"Создан новый заказ от пользователя {user.id} (логин: {login}): {base_amount} РУБ -> {total_rub} РУБ ({COMMISSION_PERCENT}%) = {total_usdt} USDT")
         
     except json.JSONDecodeError:
         logger.error("Ошибка парсинга JSON данных от WebApp")
@@ -368,8 +364,8 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
 
 
-async def handle_completion_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик кнопки 'Выполнено'"""
+async def handle_accept_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик кнопки 'Принять заказ'"""
     query = update.callback_query
     await query.answer()
     
@@ -389,11 +385,77 @@ async def handle_completion_callback(update: Update, context: ContextTypes.DEFAU
             _, user_id, chat_id, amount = query.data.split('_', 3)
             login = "неизвестен"
         
-        # Отправляем уведомление пользователю
-        completion_message = (
-            f"✅ <b>Пополнение выполнено!</b>\n\n"
+        # Отправляем уведомление пользователю о принятии заказа
+        accept_message = (
+            f"✅ <b>Заказ принят!</b>\n\n"
             f"👤 Логин: <code>{login}</code>\n"
-            f"💳 Сумма к оплате: {amount} РУБ\n\n"
+            f"💳 К оплате: {amount} РУБ\n\n"
+            f"🔐 <b>С вами свяжется оператор</b>\n"
+            f"💎 Он предоставит реквизиты для оплаты через криптовалюту\n\n"
+            f"⏳ Ожидайте связи в ближайшее время"
+        )
+        
+        await context.bot.send_message(
+            chat_id=int(chat_id),
+            text=accept_message,
+            parse_mode='HTML'
+        )
+        
+        # Создаем кнопку "Оплачено" для админа
+        paid_keyboard = [
+            [
+                InlineKeyboardButton(
+                    "💰 Оплачено", 
+                    callback_data=f"paid_{user_id}_{chat_id}_{amount}_{encoded_login}"
+                )
+            ]
+        ]
+        paid_reply_markup = InlineKeyboardMarkup(paid_keyboard)
+        
+        # Обновляем сообщение админа
+        await query.edit_message_text(
+            text=f"{query.message.text}\n\n✅ <b>СТАТУС: ЗАКАЗ ПРИНЯТ</b>\n💡 Ожидается оплата",
+            parse_mode='HTML',
+            reply_markup=paid_reply_markup
+        )
+        
+        logger.info(f"Заказ принят для пользователя {user_id} (логин: {login})")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при принятии заказа: {e}")
+        await query.edit_message_text(
+            text=f"{query.message.text}\n\n❌ <b>ОШИБКА при принятии заказа</b>",
+            parse_mode='HTML'
+        )
+
+
+async def handle_paid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик кнопки 'Оплачено'"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        # Парсим данные из callback_data
+        parts = query.data.split('_')
+        if len(parts) >= 5:
+            _, user_id, chat_id, amount, encoded_login = parts[0], parts[1], parts[2], parts[3], parts[4]
+            
+            # Декодируем логин
+            try:
+                login = base64.b64decode(encoded_login.encode()).decode()
+            except:
+                login = "неизвестен"
+        else:
+            # Старый формат без логина
+            _, user_id, chat_id, amount = query.data.split('_', 3)
+            login = "неизвестен"
+        
+        # Отправляем уведомление пользователю о завершении
+        completion_message = (
+            f"🎉 <b>Платеж подтвержден!</b>\n\n"
+            f"👤 Логин: <code>{login}</code>\n"
+            f"💳 Оплачено: {amount} РУБ\n\n"
+            f"✅ <b>Заказ выполнен успешно!</b>\n"
             f"💡 Спасибо за использование нашего сервиса!\n"
             f"❓ Если возникли вопросы, обращайтесь к администратору."
         )
@@ -404,72 +466,23 @@ async def handle_completion_callback(update: Update, context: ContextTypes.DEFAU
             parse_mode='HTML'
         )
         
-        # Обновляем сообщение админа
+        # Обновляем сообщение админа (убираем кнопки)
         await query.edit_message_text(
-            text=f"{query.message.text}\n\n✅ <b>СТАТУС: ВЫПОЛНЕНО</b>",
+            text=f"{query.message.text}\n\n💰 <b>СТАТУС: ОПЛАЧЕНО И ВЫПОЛНЕНО</b>",
             parse_mode='HTML'
         )
         
-        logger.info(f"Отправлено уведомление о выполнении пользователю {user_id} (логин: {login})")
+        logger.info(f"Заказ завершен для пользователя {user_id} (логин: {login})")
         
     except Exception as e:
-        logger.error(f"Ошибка при обработке завершения: {e}")
+        logger.error(f"Ошибка при завершении заказа: {e}")
         await query.edit_message_text(
-            text=f"{query.message.text}\n\n❌ <b>ОШИБКА при отправке уведомления</b>",
+            text=f"{query.message.text}\n\n❌ <b>ОШИБКА при завершении заказа</b>",
             parse_mode='HTML'
         )
 
 
-async def handle_processing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик кнопки 'В обработке'"""
-    query = update.callback_query
-    await query.answer()
-    
-    try:
-        # Парсим данные из callback_data
-        parts = query.data.split('_')
-        if len(parts) >= 5:
-            _, user_id, chat_id, amount, encoded_login = parts[0], parts[1], parts[2], parts[3], parts[4]
-            
-            # Декодируем логин
-            try:
-                login = base64.b64decode(encoded_login.encode()).decode()
-            except:
-                login = "неизвестен"
-        else:
-            # Старый формат без логина
-            _, user_id, chat_id, amount = query.data.split('_', 3)
-            login = "неизвестен"
-        
-        # Отправляем уведомление пользователю
-        processing_message = (
-            f"🔄 <b>Ваша заявка в обработке</b>\n\n"
-            f"👤 Логин: <code>{login}</code>\n"
-            f"💳 Сумма к оплате: {amount} РУБ\n\n"
-            f"⏳ Пожалуйста, ожидайте.\n"
-            f"📞 С вами свяжется оператор для завершения операции."
-        )
-        
-        await context.bot.send_message(
-            chat_id=int(chat_id),
-            text=processing_message,
-            parse_mode='HTML'
-        )
-        
-        # Обновляем сообщение админа
-        await query.edit_message_text(
-            text=f"{query.message.text}\n\n🔄 <b>СТАТУС: В ОБРАБОТКЕ</b>",
-            parse_mode='HTML'
-        )
-        
-        logger.info(f"Заявка пользователя {user_id} (логин: {login}) помечена как 'в обработке'")
-        
-    except Exception as e:
-        logger.error(f"Ошибка при обработке статуса 'в обработке': {e}")
-        await query.edit_message_text(
-            text=f"{query.message.text}\n\n❌ <b>ОШИБКА при обновлении статуса</b>",
-            parse_mode='HTML'
-        )
+
 
 
 async def handle_reject_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -495,11 +508,12 @@ async def handle_reject_callback(update: Update, context: ContextTypes.DEFAULT_T
         
         # Отправляем уведомление пользователю
         reject_message = (
-            f"❌ <b>Заявка отклонена</b>\n\n"
+            f"❌ <b>Заказ отклонен</b>\n\n"
             f"👤 Логин: <code>{login}</code>\n"
-            f"💳 Сумма к оплате: {amount} РУБ\n\n"
-            f"😔 К сожалению, ваша заявка не может быть обработана.\n"
-            f"📞 Если у вас есть вопросы, обратитесь к администратору."
+            f"💳 Сумма: {amount} РУБ\n\n"
+            f"😔 К сожалению, ваш заказ не может быть обработан.\n"
+            f"📞 Если у вас есть вопросы, обратитесь к администратору.\n\n"
+            f"🔄 Вы можете попробовать создать новый заказ через /start"
         )
         
         await context.bot.send_message(
@@ -510,16 +524,16 @@ async def handle_reject_callback(update: Update, context: ContextTypes.DEFAULT_T
         
         # Обновляем сообщение админа
         await query.edit_message_text(
-            text=f"{query.message.text}\n\n❌ <b>СТАТУС: ОТКЛОНЕНА</b>",
+            text=f"{query.message.text}\n\n❌ <b>СТАТУС: ЗАКАЗ ОТКЛОНЕН</b>",
             parse_mode='HTML'
         )
         
-        logger.info(f"Заявка пользователя {user_id} (логин: {login}) отклонена")
+        logger.info(f"Заказ пользователя {user_id} (логин: {login}) отклонен")
         
     except Exception as e:
-        logger.error(f"Ошибка при отклонении заявки: {e}")
+        logger.error(f"Ошибка при отклонении заказа: {e}")
         await query.edit_message_text(
-            text=f"{query.message.text}\n\n❌ <b>ОШИБКА при отклонении</b>",
+            text=f"{query.message.text}\n\n❌ <b>ОШИБКА при отклонении заказа</b>",
             parse_mode='HTML'
         )
 
@@ -552,8 +566,8 @@ async def main_async():
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_webapp_data))
     
     # Обработчики кнопок управления заявками
-    application.add_handler(CallbackQueryHandler(handle_completion_callback, pattern="^completed_"))
-    application.add_handler(CallbackQueryHandler(handle_processing_callback, pattern="^processing_"))
+    application.add_handler(CallbackQueryHandler(handle_accept_callback, pattern="^accept_"))
+    application.add_handler(CallbackQueryHandler(handle_paid_callback, pattern="^paid_"))
     application.add_handler(CallbackQueryHandler(handle_reject_callback, pattern="^reject_"))
     
     # Обработчик всех остальных сообщений
