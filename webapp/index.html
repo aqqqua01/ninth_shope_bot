@@ -386,8 +386,31 @@
 
         // Функция получения курсов криптовалют
         async function updateCryptoConversion(rubAmount) {
-            // Для GitHub Pages используем приблизные курсы
-            // В локальной разработке можно подключить реальный API
+            // Пробуємо отримати реальні курси з локального API
+            try {
+                const response = await fetch('http://localhost:8002/api/convert', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        amount: rubAmount
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        showCryptoConversion(data.conversions);
+                        console.log('🔥 Використовуємо РЕАЛЬНІ курси з Crypto Pay API!');
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.log('💡 API недоступний, показуємо приблизні курси');
+            }
+            
+            // Fallback до приблизних курсів
             showFallbackCryptoRates(rubAmount);
         }
 
@@ -429,16 +452,16 @@
             cryptoConversion.style.display = 'block';
         }
 
-        // Функция с приблизными курсами (обновляются ежедневно)
+        // Функция с актуальными курсами (обновлено 28.08.2025)
         function showFallbackCryptoRates(rubAmount) {
-            // Актуальные примерные курсы на 28.08.2025
+            // Актуальные курсы основанные на реальных данных Crypto Bot
             const approximateRates = {
-                'USDT': rubAmount / 100,     // ~100 RUB за USDT
-                'TON': rubAmount / 550,      // ~550 RUB за TON  
-                'BTC': rubAmount / 8500000,  // ~8.5M RUB за BTC
-                'ETH': rubAmount / 320000,   // ~320K RUB за ETH
-                'LTC': rubAmount / 8500,     // ~8.5K RUB за LTC
-                'BNB': rubAmount / 55000     // ~55K RUB за BNB
+                'USDT': rubAmount / 79.99,   // 1 USDT = 79.99 RUB
+                'TON': rubAmount / 510,      // ~510 RUB за TON  
+                'BTC': rubAmount / 8200000,  // ~8.2M RUB за BTC
+                'ETH': rubAmount / 275000,   // ~275K RUB за ETH
+                'LTC': rubAmount / 7800,     // ~7.8K RUB за LTC
+                'BNB': rubAmount / 48000     // ~48K RUB за BNB
             };
             
             const formattedRates = {};
