@@ -88,8 +88,8 @@ def parse_amount(amount_str: str) -> Decimal:
         amount_str = amount_str.replace(',', '.')
         amount = Decimal(amount_str)
         
-        if amount <= 0:
-            raise ValueError("Сумма должна быть больше 0")
+        if amount < 100:
+            raise ValueError("Минимальная сумма: 100 РУБ")
         
         # Округляем до 2 знаков после запятой
         return amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -162,7 +162,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         f"6. С тобой свяжется оператор и предоставит реквизиты\n\n"
         f"💰 <b>Способ оплаты:</b> Криптовалюта (USDT)\n"
         f"💱 <b>Текущий курс:</b> 1 USDT = {current_usdt_rate} РУБ\n"
-        f"📈 <b>Комиссия:</b> {COMMISSION_PERCENT}%"
+        f"📈 <b>Комиссия:</b> {COMMISSION_PERCENT}%\n"
+        f"💵 <b>Минимальная сумма:</b> 100 РУБ"
     )
     
     await update.message.reply_text(help_text, parse_mode='HTML')

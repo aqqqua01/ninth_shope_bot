@@ -17,7 +17,7 @@ const WEBAPP_CONFIG = {
     
     // Валідація
     validation: {
-        minAmount: 1,
+        minAmount: 100,
         maxAmount: 1000000
     }
 };
