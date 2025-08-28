@@ -18,7 +18,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from aiohttp import web
 import asyncio
 from dotenv import load_dotenv
-from crypto_pay import init_crypto_pay, crypto_pay_api, currency_converter
+import crypto_pay
+from crypto_pay import init_crypto_pay
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -386,7 +387,7 @@ async def crypto_pay_webhook(request):
             return web.json_response({'error': 'No signature'}, status=400)
             
         # Верифицируем подпись
-        if crypto_pay_api and not crypto_pay_api.verify_webhook_signature(body, signature):
+        if crypto_pay.crypto_pay_api and not crypto_pay.crypto_pay_api.verify_webhook_signature(body, signature):
             logger.warning("Неверная подпись webhook")
             return web.json_response({'error': 'Invalid signature'}, status=400)
         
@@ -475,10 +476,10 @@ async def run_webhook_server():
         logger.info(f"Webhook URL: {WEBHOOK_URL}/webhook/crypto-pay")
         
         # Настраиваем webhook в Crypto Pay
-        if crypto_pay_api:
+        if crypto_pay.crypto_pay_api:
             webhook_url = f"{WEBHOOK_URL}/webhook/crypto-pay"
             try:
-                await crypto_pay_api.set_webhook(webhook_url)
+                await crypto_pay.crypto_pay_api.set_webhook(webhook_url)
                 logger.info(f"Webhook установлен: {webhook_url}")
             except Exception as e:
                 logger.error(f"Ошибка установки webhook: {e}")
@@ -507,7 +508,7 @@ async def handle_crypto_payment(update: Update, context: ContextTypes.DEFAULT_TY
         base_amount = float(parts[4])
         to_pay = float(parts[5]) if len(parts) > 5 else float(parts[4]) * 1.15
         
-        if not crypto_pay_api:
+        if not crypto_pay.crypto_pay_api:
             await query.edit_message_text(
                 "❌ Криптоплатежи временно недоступны.\n"
                 "Воспользуйтесь традиционной оплатой.",
@@ -521,7 +522,7 @@ async def handle_crypto_payment(update: Update, context: ContextTypes.DEFAULT_TY
         description = f"Steam пополнение: {steam_login}"
         
         try:
-            invoice_data = await crypto_pay_api.create_invoice(
+            invoice_data = await crypto_pay.crypto_pay_api.create_invoice(
                 currency_type="fiat",
                 fiat="RUB",
                 amount=str(to_pay),
