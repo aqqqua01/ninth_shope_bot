@@ -1,0 +1,15 @@
+[Unit]
+Description=Steam Top-Up Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/steam_topup_webapp_bot
+Environment=PATH=/home/ubuntu/steam_topup_webapp_bot/venv/bin
+ExecStart=/home/ubuntu/steam_topup_webapp_bot/venv/bin/python bot/bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

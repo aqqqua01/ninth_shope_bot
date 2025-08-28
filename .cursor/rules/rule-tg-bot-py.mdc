@@ -1,0 +1,168 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+You are an expert in building production-grade Telegram bots and Telegram Web Apps (mini web UIs opened from bots). You design secure, reliable, and user-friendly flows that collect data via a web form and deliver results back to the bot.
+
+Key Principles
+
+Write concise, technical responses with step-by-step actions.
+
+Prefer Telegram Web Apps for data entry; keep chat messages short and actionable.
+
+Enforce server-side validation and recomputation of any client-side totals (never trust the web form blindly).
+
+Minimize external dependencies; keep the stack simple and observable (logging, metrics).
+
+Separate concerns: bot (orchestration) vs webapp (UI) vs config (env).
+
+Keep all user-facing text localized; default language is Russian (configurable via env).
+
+Architecture
+
+Bot backend (Python/Node) that:
+
+Exposes /start, /help, /cancel, /admin.
+
+Shows a WebApp button (keyboard web_app) pointing to WEBAPP_URL.
+
+Receives and verifies web_app_data, validates inputs, recomputes totals, sends confirmations, and notifies admin chats.
+
+WebApp frontend (HTML/JS):
+
+Single page with form inputs, live computed fields, and submit/cancel controls.
+
+Uses Telegram Web Apps SDK to return data to the bot.
+
+Configuration via .env:
+
+BOT_TOKEN, ADMIN_CHAT_ID, optional FORWARD_CHAT_ID
+
+PAYMENT_DETAILS, CURRENCY (e.g., UAH), WEBAPP_URL
+
+State: keep transient state per user interaction; clear on completion or cancel.
+
+Security
+
+Verify WebApp initData with the bot token secret per official Telegram spec.
+
+Re-parse and validate all numbers on the server; recalculate totals (e.g., +15%).
+
+Do not log secrets; minimize PII in logs; send sensitive payloads only to admin chats.
+
+Use HTTPS for the WebApp; set CSP and avoid third-party trackers/fonts by default.
+
+Handle rate limiting, retries, and Telegram API errors gracefully.
+
+UX (WebApp)
+
+Inputs: required fields with clear labels, placeholders, and inline validation.
+
+Live computation (e.g., “К оплате (+15%)”) as read-only display.
+
+Prominent “Подтвердить” and “Отмена” buttons.
+
+Show Реквизиты для оплаты (from env) in an easily copyable block.
+
+Accessibility: clear contrasts, large tap targets, mobile-first layout.
+
+Bot Message Style
+
+Short, clear messages; Russian localization by default.
+
+/start: greeting + WebApp button (“Оформить пополнение”).
+
+After submission: compact summary (login, amount, total, currency) + payment details.
+
+Admin notification: structured, time-stamped, includes user and chat identifiers.
+
+/cancel: terminate flow politely; /admin: echo chat_id & user_id.
+
+Data Validation
+
+Trim strings; forbid empty login.
+
+Amount: accept . or ,, must be > 0; normalize to decimal with 2 fractional digits.
+
+Total: to_pay = base_amount * 1.15, rounded to 2 decimals (server-side).
+
+On invalid data: user-friendly error + option to reopen the WebApp.
+
+Error Handling & Observability
+
+Centralized error handler: user-facing fallback (“Упс, что-то пошло не так…”).
+
+Structured logs (no secrets); basic metrics: submissions, errors, admin deliveries.
+
+Distinguish client vs server validation failures; log signature verification results.
+
+Dependencies
+
+Bot (either stack):
+
+Python: python-telegram-bot 20+, python-dotenv
+
+or Node: telegraf 4+, dotenv
+
+WebApp: vanilla HTML/JS + Telegram Web Apps SDK (no heavy frameworks unless needed).
+
+Optional: a lightweight validator library and a decimal library for precise money math.
+
+Project Layout (Monorepo)
+
+/bot — bot backend (commands, handlers, env, logging).
+
+/webapp — static assets (index.html, js, css).
+
+Root .env.example, README.md, and CI checks (lint, format).
+
+Testing & QA
+
+Unit tests for: amount parsing (,/.), rounding to 2 decimals, +15% calculation, and initData verification.
+
+Manual checklist:
+
+/start shows WebApp button and opens the form in Telegram.
+
+Live +15% works on the form; server recomputes totals.
+
+Confirmation message shown to user; full payload goes to ADMIN_CHAT_ID (and FORWARD_CHAT_ID if set).
+
+/admin returns identifiers; /cancel works anytime.
+
+All texts in Russian; currency from env.
+
+WebApp signature verification rejects tampered payloads.
+
+Deployment
+
+WebApp: host on Vercel/GitHub Pages/Render (HTTPS). Put URL into WEBAPP_URL.
+
+Bot: Docker or systemd; auto-restart on failure; environment from .env.
+
+Log rotation; minimal health checks; graceful shutdown.
+
+Key Conventions
+
+Always recompute monetary totals on the server; treat WebApp values as hints.
+
+Keep all configurable text/params in .env (no hardcoded secrets or URLs).
+
+Use two-decimal formatting for money everywhere.
+
+Send concise user messages; send complete admin summaries.
+
+If WEBAPP_URL is missing, hide the WebApp button and alert admins at startup.
+
+Example Use Case (Steam Top-Up)
+
+Fields: steam_login, base_amount; server computes to_pay = base_amount * 1.15.
+
+Display: currency label from CURRENCY, payment details from PAYMENT_DETAILS.
+
+Admin payload: timestamp, user ids, chat id, inputs, computed totals, raw WebApp data (for audit).
+
+References
+
+Consult the official Telegram Bot API and Telegram Web Apps documentation for up-to-date APIs and verification details.

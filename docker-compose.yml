@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  steam-bot:
+    build: .
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
+      - FORWARD_CHAT_ID=${FORWARD_CHAT_ID}
+      - PAYMENT_DETAILS=${PAYMENT_DETAILS}
+      - CURRENCY=${CURRENCY}
+      - WEBAPP_URL=${WEBAPP_URL}
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

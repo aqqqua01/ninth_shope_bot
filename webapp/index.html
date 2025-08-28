@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Пополнение Steam</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--tg-theme-text-color, #000000);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--tg-theme-hint-color, #999999);
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .form-label.required::after {
+            content: " *";
+            color: #e74c3c;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--tg-theme-button-color, #0088cc);
+            border-radius: 8px;
+            font-size: 16px;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            transition: border-color 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--tg-theme-button-color, #0088cc);
+            box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.1);
+        }
+
+        .form-input:invalid {
+            border-color: #e74c3c;
+        }
+
+        .form-input[readonly] {
+            background: var(--tg-theme-secondary-bg-color, #f8f9fa);
+            color: var(--tg-theme-hint-color, #999999);
+            cursor: not-allowed;
+        }
+
+        .total-display {
+            background: linear-gradient(135deg, var(--tg-theme-button-color, #0088cc), #005580);
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 18px;
+            margin: 20px 0;
+            box-shadow: 0 4px 12px rgba(0, 136, 204, 0.3);
+        }
+
+        .payment-details {
+            background: var(--tg-theme-secondary-bg-color, #f8f9fa);
+            border: 1px solid var(--tg-theme-button-color, #0088cc);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+
+        .payment-details h3 {
+            margin-bottom: 12px;
+            color: var(--tg-theme-text-color, #000000);
+            font-size: 16px;
+        }
+
+        .payment-details pre {
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            color: var(--tg-theme-text-color, #000000);
+            background: var(--tg-theme-bg-color, #ffffff);
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-height: 56px;
+        }
+
+        .btn-primary {
+            background: var(--tg-theme-button-color, #0088cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+        }
+
+        .btn-primary:hover {
+            background: #005580;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 136, 204, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--tg-theme-destructive-text-color, #e74c3c);
+            border: 2px solid var(--tg-theme-destructive-text-color, #e74c3c);
+        }
+
+        .btn-secondary:hover {
+            background: var(--tg-theme-destructive-text-color, #e74c3c);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .currency {
+            font-weight: 600;
+            color: var(--tg-theme-button-color, #0088cc);
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 0 10px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎮 Пополнение Steam</h1>
+            <p>Заполните форму для оформления пополнения</p>
+        </div>
+
+        <form id="topupForm">
+            <div class="form-group">
+                <label for="steamLogin" class="form-label required">Логин Steam</label>
+                <input 
+                    type="text" 
+                    id="steamLogin" 
+                    class="form-input"
+                    placeholder="Введите ваш логин Steam"
+                    required
+                    autocomplete="off"
+                >
+                <div class="error-message" id="loginError">Логин Steam обязателен для заполнения</div>
+            </div>
+
+            <div class="form-group">
+                <label for="baseAmount" class="form-label required">Сумма пополнения</label>
+                <input 
+                    type="text" 
+                    id="baseAmount" 
+                    class="form-input"
+                    placeholder="Введите сумму (например: 100 или 100,50)"
+                    required
+                    autocomplete="off"
+                >
+                <div class="error-message" id="amountError">Введите корректную сумму больше 0</div>
+            </div>
+
+            <div class="total-display">
+                К оплате (+15%): <span id="totalAmount">0.00</span> <span class="currency" id="currency">UAH</span>
+            </div>
+
+            <div class="payment-details">
+                <h3>💳 Реквизиты для оплаты:</h3>
+                <pre id="paymentDetails">Реквизиты будут показаны после подтверждения</pre>
+            </div>
+
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" id="cancelBtn">
+                    ❌ Отмена
+                </button>
+                <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                    ✅ Подтвердить
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Элементы формы
+        const form = document.getElementById('topupForm');
+        const steamLoginInput = document.getElementById('steamLogin');
+        const baseAmountInput = document.getElementById('baseAmount');
+        const totalAmountSpan = document.getElementById('totalAmount');
+        const currencySpan = document.getElementById('currency');
+        const paymentDetailsElement = document.getElementById('paymentDetails');
+        const submitBtn = document.getElementById('submitBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const loginError = document.getElementById('loginError');
+        const amountError = document.getElementById('amountError');
+
+        // Конфигурация (в реальном приложении получать из env)
+        const CONFIG = {
+            currency: 'UAH',
+            commissionRate: 0.15,
+            paymentDetails: `Номер карты: 4441 1144 1111 1111
+Получатель: Иван Иванов
+Банк: ПриватБанк`
+        };
+
+        // Устанавливаем валюту и реквизиты
+        currencySpan.textContent = CONFIG.currency;
+        paymentDetailsElement.textContent = CONFIG.paymentDetails;
+
+        // Функция парсинга суммы
+        function parseAmount(amountStr) {
+            if (!amountStr) return 0;
+            
+            // Заменяем запятую на точку и удаляем пробелы
+            const cleanAmount = amountStr.replace(',', '.').replace(/\s/g, '');
+            const parsed = parseFloat(cleanAmount);
+            
+            return isNaN(parsed) ? 0 : Math.max(0, parsed);
+        }
+
+        // Функция расчета итоговой суммы
+        function calculateTotal(baseAmount) {
+            const total = baseAmount * (1 + CONFIG.commissionRate);
+            return Math.round(total * 100) / 100; // Округление до 2 знаков
+        }
+
+        // Функция валидации формы
+        function validateForm() {
+            let isValid = true;
+
+            // Валидация логина
+            const steamLogin = steamLoginInput.value.trim();
+            if (!steamLogin) {
+                loginError.style.display = 'block';
+                steamLoginInput.style.borderColor = '#e74c3c';
+                isValid = false;
+            } else {
+                loginError.style.display = 'none';
+                steamLoginInput.style.borderColor = '';
+            }
+
+            // Валидация суммы
+            const baseAmount = parseAmount(baseAmountInput.value);
+            if (baseAmount <= 0) {
+                amountError.style.display = 'block';
+                baseAmountInput.style.borderColor = '#e74c3c';
+                isValid = false;
+            } else {
+                amountError.style.display = 'none';
+                baseAmountInput.style.borderColor = '';
+            }
+
+            return isValid;
+        }
+
+        // Функция обновления итоговой суммы
+        function updateTotal() {
+            const baseAmount = parseAmount(baseAmountInput.value);
+            const total = calculateTotal(baseAmount);
+            
+            totalAmountSpan.textContent = total.toFixed(2);
+            
+            // Обновляем состояние кнопки
+            const isFormValid = validateForm();
+            submitBtn.disabled = !isFormValid;
+        }
+
+        // Обработчики событий
+        steamLoginInput.addEventListener('input', () => {
+            validateForm();
+            submitBtn.disabled = !validateForm();
+        });
+
+        baseAmountInput.addEventListener('input', updateTotal);
+
+        // Обработчик отправки формы
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            if (!validateForm()) {
+                return;
+            }
+
+            const baseAmount = parseAmount(baseAmountInput.value);
+            const totalAmount = calculateTotal(baseAmount);
+            
+            const formData = {
+                steam_login: steamLoginInput.value.trim(),
+                base_amount: baseAmount,
+                to_pay: totalAmount,
+                currency: CONFIG.currency,
+                timestamp: new Date().toISOString()
+            };
+
+            // Отправляем данные в Telegram
+            tg.sendData(JSON.stringify(formData));
+        });
+
+        // Обработчик кнопки отмены
+        cancelBtn.addEventListener('click', () => {
+            tg.close();
+        });
+
+        // Настройка главной кнопки Telegram
+        tg.MainButton.text = "Подтвердить заказ";
+        tg.MainButton.color = "#0088cc";
+        
+        tg.MainButton.onClick(() => {
+            form.dispatchEvent(new Event('submit'));
+        });
+
+        // Показываем/скрываем главную кнопку в зависимости от валидности формы
+        function updateMainButton() {
+            if (validateForm() && parseAmount(baseAmountInput.value) > 0) {
+                tg.MainButton.show();
+            } else {
+                tg.MainButton.hide();
+            }
+        }
+
+        steamLoginInput.addEventListener('input', updateMainButton);
+        baseAmountInput.addEventListener('input', updateMainButton);
+
+        // Изначально скрываем главную кнопку
+        tg.MainButton.hide();
+
+        // Устанавливаем тему
+        document.body.style.backgroundColor = tg.themeParams.bg_color || '#ffffff';
+        document.body.style.color = tg.themeParams.text_color || '#000000';
+
+        console.log('Steam Top-Up WebApp загружен');
+    </script>
+</body>
+</html>
