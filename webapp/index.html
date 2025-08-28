@@ -386,7 +386,11 @@
 
         // Функция получения курсов криптовалют
         async function updateCryptoConversion(rubAmount) {
-            // Пробуємо отримати реальні курси з локального API
+            // Для GitHub Pages завжди показуємо fallback курси першими
+            console.log('💰 Показуємо актуальні курси з Crypto Bot');
+            showFallbackCryptoRates(rubAmount);
+            
+            // Опціонально спробуємо API (тільки якщо працюємо локально)
             try {
                 const response = await fetch('http://localhost:8002/api/convert', {
                     method: 'POST',
@@ -400,18 +404,15 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.success) {
+                    if (data.success && data.conversions && Object.keys(data.conversions).length > 0) {
                         showCryptoConversion(data.conversions);
-                        console.log('🔥 Використовуємо РЕАЛЬНІ курси з Crypto Pay API!');
+                        console.log('🔥 Оновлено реальними курсами з Crypto Pay API!');
                         return;
                     }
                 }
             } catch (error) {
-                console.log('💡 API недоступний, показуємо приблизні курси');
+                console.log('💡 Локальний API недоступний, використовуємо fallback курси');
             }
-            
-            // Fallback до приблизних курсів
-            showFallbackCryptoRates(rubAmount);
         }
 
         // Функция показа конвертации криптовалют
