@@ -182,41 +182,7 @@
             color: var(--tg-theme-button-color, #0088cc);
         }
 
-        .crypto-conversion {
-            background: var(--tg-theme-secondary-bg-color, #f8f9fa);
-            border: 1px solid var(--tg-theme-button-color, #0088cc);
-            border-radius: 8px;
-            padding: 16px;
-            margin: 20px 0;
-        }
 
-        .crypto-conversion h3 {
-            margin-bottom: 12px;
-            color: var(--tg-theme-text-color, #000000);
-            font-size: 16px;
-        }
-
-        .crypto-rate {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--tg-theme-hint-color, #e0e0e0);
-        }
-
-        .crypto-rate:last-child {
-            border-bottom: none;
-        }
-
-        .crypto-symbol {
-            font-weight: 600;
-            color: var(--tg-theme-button-color, #0088cc);
-        }
-
-        .crypto-amount {
-            font-family: monospace;
-            color: var(--tg-theme-text-color, #000000);
-        }
 
         @media (max-width: 480px) {
             .container {
@@ -232,49 +198,42 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎮 Пополнение Steam</h1>
-            <p>Заполните форму для оформления пополнения</p>
+            <h1>💰 Пополнение</h1>
+            <p>Быстрое пополнение через криптовалюту</p>
         </div>
 
         <form id="topupForm">
             <div class="form-group">
-                <label for="steamLogin" class="form-label required">Логин Steam</label>
+                <label for="amount" class="form-label required">Сумма в рублях</label>
                 <input 
                     type="text" 
-                    id="steamLogin" 
+                    id="amount" 
                     class="form-input"
-                    placeholder="Введите ваш логин Steam"
+                    placeholder="Введите сумму в рублях"
                     required
                     autocomplete="off"
                 >
-                <div class="error-message" id="loginError">Логин Steam обязателен для заполнения</div>
-            </div>
-
-            <div class="form-group">
-                <label for="baseAmount" class="form-label required">Сумма пополнения</label>
-                <input 
-                    type="text" 
-                    id="baseAmount" 
-                    class="form-input"
-                    placeholder="Введите сумму (минимум 100 рублей)"
-                    required
-                    autocomplete="off"
-                >
-                <div class="error-message" id="amountError">Минимальная сумма: 100 РУБ</div>
+                <div class="error-message" id="amountError">Введите корректную сумму</div>
             </div>
 
             <div class="total-display">
-                К оплате: <span id="totalAmount">0.00</span> <span class="currency" id="currency">РУБ</span>
-            </div>
-
-            <div class="crypto-conversion" id="cryptoConversion" style="display: none;">
-                <h3>💎 Варианты оплаты криптовалютой:</h3>
-                <div id="cryptoRates"></div>
+                К оплате: <span id="totalRubAmount">0.00</span> <span class="currency">РУБ</span>
+                <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
+                    Эквивалент: <span id="usdtAmount">0.00</span> USDT
+                </div>
             </div>
 
             <div class="payment-details">
-                <h3>💳 Реквизиты для оплаты:</h3>
-                <pre id="paymentDetails">Реквізити будуть надіслані після підтвердження заявки</pre>
+                <h3>🔐 Способ оплаты</h3>
+                <div style="padding: 12px; background: #f0f8ff; border-radius: 8px; margin: 10px 0;">
+                    <strong>💎 Криптовалюта (USDT)</strong>
+                </div>
+                <div style="padding: 8px; background: #fff3cd; border-radius: 6px; margin: 10px 0; font-size: 13px;">
+                    ℹ️ Комиссия сервиса: <strong id="commissionInfo">15%</strong>
+                </div>
+                <p style="color: #666; font-size: 14px;">
+                    После подтверждения заявки с вами свяжется оператор и предоставит точные реквизиты для оплаты
+                </p>
             </div>
 
             <div class="button-group">
@@ -296,26 +255,21 @@
 
         // Элементы формы
         const form = document.getElementById('topupForm');
-        const steamLoginInput = document.getElementById('steamLogin');
-        const baseAmountInput = document.getElementById('baseAmount');
-        const totalAmountSpan = document.getElementById('totalAmount');
-        const currencySpan = document.getElementById('currency');
-        const paymentDetailsElement = document.getElementById('paymentDetails');
+        const amountInput = document.getElementById('amount');
+        const totalRubAmountSpan = document.getElementById('totalRubAmount');
+        const usdtAmountSpan = document.getElementById('usdtAmount');
         const submitBtn = document.getElementById('submitBtn');
         const cancelBtn = document.getElementById('cancelBtn');
-        const loginError = document.getElementById('loginError');
         const amountError = document.getElementById('amountError');
 
-        // Використовуємо конфігурацію з config.js
+        // Используем конфигурацию из config.js
         const CONFIG = window.WEBAPP_CONFIG || {
-            currency: 'РУБ',
-            commissionRate: 0.15,
-            defaultPaymentDetails: `Реквізити будуть надіслані після підтвердження заявки`
+            usdtRate: 95.0,
+            commissionPercent: 15.0
         };
 
-        // Встановлюємо валюту та реквізити
-        currencySpan.textContent = CONFIG.currency;
-        paymentDetailsElement.textContent = CONFIG.defaultPaymentDetails;
+        // Устанавливаем комиссию в интерфейсе
+        document.getElementById('commissionInfo').textContent = CONFIG.commissionPercent + '%';
 
         // Функция парсинга суммы
         function parseAmount(amountStr) {
@@ -328,177 +282,56 @@
             return isNaN(parsed) ? 0 : Math.max(0, parsed);
         }
 
-        // Функция расчета итоговой суммы
-        function calculateTotal(baseAmount) {
-            const total = baseAmount * (1 + CONFIG.commissionRate);
+        // Функция расчета суммы с комиссией
+        function calculateTotalWithCommission(baseAmount) {
+            const commission = 1 + (CONFIG.commissionPercent / 100);
+            const total = baseAmount * commission;
             return Math.round(total * 100) / 100; // Округление до 2 знаков
+        }
+
+        // Функция расчета USDT
+        function calculateUSDT(rubAmount) {
+            const usdt = rubAmount / CONFIG.usdtRate;
+            return Math.round(usdt * 100) / 100; // Округление до 2 знаков
         }
 
         // Функция валидации формы
         function validateForm() {
             let isValid = true;
 
-            // Валидация логина
-            const steamLogin = steamLoginInput.value.trim();
-            if (!steamLogin) {
-                loginError.style.display = 'block';
-                steamLoginInput.style.borderColor = '#e74c3c';
-                isValid = false;
-            } else {
-                loginError.style.display = 'none';
-                steamLoginInput.style.borderColor = '';
-            }
-
             // Валидация суммы
-            const baseAmount = parseAmount(baseAmountInput.value);
-            const minAmount = CONFIG.validation?.minAmount || 100;
-            if (baseAmount < minAmount) {
-                amountError.textContent = `Минимальная сумма: ${minAmount} РУБ`;
+            const amount = parseAmount(amountInput.value);
+            if (amount <= 0) {
+                amountError.textContent = 'Введите корректную сумму больше 0';
                 amountError.style.display = 'block';
-                baseAmountInput.style.borderColor = '#e74c3c';
+                amountInput.style.borderColor = '#e74c3c';
                 isValid = false;
             } else {
                 amountError.style.display = 'none';
-                baseAmountInput.style.borderColor = '';
+                amountInput.style.borderColor = '';
             }
 
             return isValid;
         }
 
-        // Функция обновления итоговой суммы
+        // Функция обновления сумм
         function updateTotal() {
-            const baseAmount = parseAmount(baseAmountInput.value);
-            const total = calculateTotal(baseAmount);
+            const baseAmount = parseAmount(amountInput.value);
+            const totalWithCommission = calculateTotalWithCommission(baseAmount);
+            const usdtAmount = calculateUSDT(totalWithCommission);
             
-            totalAmountSpan.textContent = total.toFixed(2);
-            
-            // Показываем конвертацию в криптовалюты
-            if (baseAmount >= 100) {
-                updateCryptoConversion(total);
-            } else {
-                hideCryptoConversion();
-            }
+            totalRubAmountSpan.textContent = totalWithCommission.toFixed(2);
+            usdtAmountSpan.textContent = usdtAmount.toFixed(2);
             
             // Обновляем состояние кнопки
             const isFormValid = validateForm();
             submitBtn.disabled = !isFormValid;
         }
 
-        // Функция получения курсов криптовалют
-        async function updateCryptoConversion(rubAmount) {
-            // Для GitHub Pages завжди показуємо fallback курси першими
-            console.log('💰 Показуємо актуальні курси з Crypto Bot');
-            showFallbackCryptoRates(rubAmount);
-            
-            // Опціонально спробуємо API (тільки якщо працюємо локально)
-            try {
-                const response = await fetch('http://localhost:8002/api/convert', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        amount: rubAmount
-                    })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.success && data.conversions && Object.keys(data.conversions).length > 0) {
-                        showCryptoConversion(data.conversions);
-                        console.log('🔥 Оновлено реальними курсами з Crypto Pay API!');
-                        return;
-                    }
-                }
-            } catch (error) {
-                console.log('💡 Локальний API недоступний, використовуємо fallback курси');
-            }
-        }
 
-        // Функция показа конвертации криптовалют
-        function showCryptoConversion(conversions) {
-            const cryptoConversion = document.getElementById('cryptoConversion');
-            const cryptoRates = document.getElementById('cryptoRates');
-            
-            cryptoRates.innerHTML = '';
-            
-            // Порядок отображения валют
-            const order = ['USDT', 'TON', 'BTC', 'ETH', 'LTC', 'BNB'];
-            const sortedConversions = {};
-            
-            // Сначала добавляем валюты в нужном порядке
-            order.forEach(asset => {
-                if (conversions[asset]) {
-                    sortedConversions[asset] = conversions[asset];
-                }
-            });
-            
-            // Затем добавляем остальные
-            Object.keys(conversions).forEach(asset => {
-                if (!sortedConversions[asset]) {
-                    sortedConversions[asset] = conversions[asset];
-                }
-            });
-            
-            Object.entries(sortedConversions).forEach(([asset, data]) => {
-                const rateDiv = document.createElement('div');
-                rateDiv.className = 'crypto-rate';
-                rateDiv.innerHTML = `
-                    <span class="crypto-symbol">${asset}</span>
-                    <span class="crypto-amount">${data.amount}</span>
-                `;
-                cryptoRates.appendChild(rateDiv);
-            });
-            
-            cryptoConversion.style.display = 'block';
-        }
-
-        // Функция с точными курсами из Crypto Bot (28.08.2025)
-        function showFallbackCryptoRates(rubAmount) {
-            // Реальные курсы прямо из @CryptoBot
-            const approximateRates = {
-                'USDT': rubAmount / 79.99,        // 1 USDT = 79.99 RUB
-                'TON': rubAmount / 252.55,        // 1 TON = 252.55 RUB  
-                'BTC': rubAmount / 8200000,       // ~8.2M RUB за BTC
-                'ETH': rubAmount / 352274.43,     // 1 ETH = 352274.43 RUB
-                'LTC': rubAmount / 8597.99,       // 1 LTC = 8597.99 RUB
-                'BNB': rubAmount / 68905.16,      // 1 BNB = 68905.16 RUB
-                'TRX': rubAmount / 25.99          // 1 TRX = 25.99 RUB
-            };
-            
-            const formattedRates = {};
-            Object.entries(approximateRates).forEach(([asset, amount]) => {
-                let formatted;
-                if (asset === 'BTC') {
-                    formatted = amount.toFixed(6);
-                } else if (asset === 'ETH') {
-                    formatted = amount.toFixed(4);
-                } else if (asset === 'LTC' || asset === 'BNB') {
-                    formatted = amount.toFixed(3);
-                } else if (asset === 'TRX') {
-                    formatted = amount.toFixed(1);
-                } else {
-                    formatted = amount.toFixed(2);
-                }
-                
-                formattedRates[asset] = { amount: formatted };
-            });
-            
-            showCryptoConversion(formattedRates);
-        }
-
-        // Функция скрытия конвертации
-        function hideCryptoConversion() {
-            document.getElementById('cryptoConversion').style.display = 'none';
-        }
 
         // Обработчики событий
-        steamLoginInput.addEventListener('input', () => {
-            validateForm();
-            submitBtn.disabled = !validateForm();
-        });
-
-        baseAmountInput.addEventListener('input', updateTotal);
+        amountInput.addEventListener('input', updateTotal);
 
         // Обработчик отправки формы
         form.addEventListener('submit', (e) => {
@@ -508,14 +341,10 @@
                 return;
             }
 
-            const baseAmount = parseAmount(baseAmountInput.value);
-            const totalAmount = calculateTotal(baseAmount);
+            const amount = parseAmount(amountInput.value);
             
             const formData = {
-                steam_login: steamLoginInput.value.trim(),
-                base_amount: baseAmount,
-                to_pay: totalAmount,
-                currency: CONFIG.currency,
+                amount: amount,
                 timestamp: new Date().toISOString()
             };
 
@@ -529,7 +358,7 @@
         });
 
         // Настройка главной кнопки Telegram
-        tg.MainButton.text = "Подтвердить заказ";
+        tg.MainButton.text = "Подтвердить заявку";
         tg.MainButton.color = "#0088cc";
         
         tg.MainButton.onClick(() => {
@@ -538,15 +367,14 @@
 
         // Показываем/скрываем главную кнопку в зависимости от валидности формы
         function updateMainButton() {
-            if (validateForm() && parseAmount(baseAmountInput.value) > 0) {
+            if (validateForm() && parseAmount(amountInput.value) > 0) {
                 tg.MainButton.show();
             } else {
                 tg.MainButton.hide();
             }
         }
 
-        steamLoginInput.addEventListener('input', updateMainButton);
-        baseAmountInput.addEventListener('input', updateMainButton);
+        amountInput.addEventListener('input', updateMainButton);
 
         // Изначально скрываем главную кнопку
         tg.MainButton.hide();
@@ -555,7 +383,7 @@
         document.body.style.backgroundColor = tg.themeParams.bg_color || '#ffffff';
         document.body.style.color = tg.themeParams.text_color || '#000000';
 
-        console.log('Steam Top-Up WebApp загружен');
+        console.log('Crypto Top-Up WebApp загружен');
     </script>
 </body>
 </html>
